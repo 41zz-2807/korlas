@@ -7,6 +7,19 @@ ENV_TEMPLATE=$APP_DIR/docker/env.template
 
 cd "$APP_DIR"
 
+# Kunci konfigurasi basis data: SQLite SELALU di volume /data. Env proc
+# (env_file compose / .env.docker lama) bisa memuat DB_DATABASE yang salah
+# dan menimpa .env (dotenv immutable); di-export di sini agar deterministik.
+export DB_CONNECTION=sqlite
+export DB_DATABASE=/data/database.sqlite
+mkdir -p /data
+[ -f /data/database.sqlite ] || touch /data/database.sqlite
+
+# Paksa mode produksi pada setiap boot, terlepas dari APP_ENV/APP_DEBUG
+# di .env.docker lama (yang umumnya berisi local/debug=true).
+export APP_ENV=production
+export APP_DEBUG=false
+
 # 1) Siapkan `.env` persisten di volume /data (hanya sekali), lalu pautkan ke project.
 #    Template memakai ${VAR}; nilai diisi dari env container (docker-compose env_file).
 if [ ! -f "$ENV_FILE" ]; then
