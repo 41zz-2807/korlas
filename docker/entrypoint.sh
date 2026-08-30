@@ -43,19 +43,28 @@ if ! grep -qE '^APP_KEY=.+' "$ENV_FILE"; then
     php artisan key:generate --force
 fi
 
-# 3) Run migrations (idempotent)
+# 3) Pastikan APP_KEY tersedia sebagai env proses. `.env.docker lama` sering
+#    memuat `APP_KEY=` kosong yang di-inject compose (dotenv immutable =
+#    nilai kosong memblokir .env), sehingga app crash "No application
+#    encryption key". Export dari file agar Apache & cron selalu mendapat key.
+FILE_KEY="$(sed -nE 's/^APP_KEY=(.*)$/\1/p' "$ENV_FILE" | tail -1)"
+if [ -n "$FILE_KEY" ] && [ -z "${APP_KEY:-}" ]; then
+    export APP_KEY="$FILE_KEY"
+fi
+
+# 4) Run migrations (idempotent)
 php artisan migrate --force
 
-# 4) Seed only on first boot
+# 5) Seed only on first boot
 if [ ! -f /data/.seeded ]; then
     php artisan db:seed --force
     touch /data/.seeded
 fi
 
-# 5) Ensure runtime-writable permissions
+# 6) Ensure runtime-writable permissions
 chown -R www-data:www-data /data storage bootstrap/cache
 
-# 6) Set up Laravel scheduler via cron (runs every minute)
+# 7) Set up Laravel scheduler via cron (runs every minute)
 export TZ=Asia/Jakarta
 mkdir -p /etc/cron.d
 printf "SHELL=/bin/bash\nTZ=Asia/Jakarta\nPATH=/usr/local/bin:/usr/bin:/bin\n* * * * * /usr/local/bin/php /var/www/html/artisan schedule:run >> /var/www/html/storage/logs/scheduler.log 2>&1\n" > /etc/cron.d/laravel-scheduler
