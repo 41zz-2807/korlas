@@ -4,6 +4,10 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: korlas
+    # Source secret untuk env container (ADMIN_PASSWORD, TELEGRAM_*, dll).
+    # File TIDAK di-commit; buat di server: cp docker/env.template .env.docker lalu isi.
+    env_file:
+      - .env.docker
     ports:
       - "7474:80"
     volumes:

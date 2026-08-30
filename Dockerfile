@@ -4,6 +4,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         git \
         unzip \
         cron \
+        gettext-base \
         libicu-dev \
         libonig-dev \
         libzip-dev \
@@ -36,9 +37,10 @@ COPY . .
 # Ensure writable cache dir (excluded from build context via .dockerignore)
 RUN mkdir -p bootstrap/cache storage/app/public
 
-# Use container-friendly environment (SQLite at /data, no host paths)
-RUN cp .env.docker .env \
-    && rm -f composer.lock \
+# Use container-friendly environment (SQLite at /data, no host paths).
+# `.env` dibuat di runtime oleh entrypoint dari `docker/env.template` +
+# variabel lingkungan (secrets dikirim via docker-compose `env_file`).
+RUN rm -f composer.lock \
     && composer install --no-interaction --no-dev --optimize-autoloader \
     && mkdir -p /data \
     && chown -R www-data:www-data storage bootstrap/cache /data \
