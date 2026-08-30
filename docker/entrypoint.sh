@@ -56,10 +56,19 @@ fi
 #    Untuk isi data contoh: docker exec korlas php artisan db:seed --force
 php artisan migrate --force
 
-# 5) Ensure runtime-writable permissions
+# 5) Salin daftar siswa ke volume storage bila belum ada. Folder storage
+#    ditutupi volume kosong, jadi file dari image tidak otomatis terlihat;
+#    data yang sudah diedit di volume tetap dipertahankan.
+STUDENT_FILE="$APP_DIR/storage/app/siswa.txt"
+if [ ! -f "$STUDENT_FILE" ] && [ -f "$APP_DIR/docker/siswa.txt" ]; then
+    mkdir -p "$APP_DIR/storage/app"
+    cp "$APP_DIR/docker/siswa.txt" "$STUDENT_FILE"
+fi
+
+# 6) Ensure runtime-writable permissions
 chown -R www-data:www-data /data storage bootstrap/cache
 
-# 6) Set up Laravel scheduler via cron (runs every minute)
+# 7) Set up Laravel scheduler via cron (runs every minute)
 export TZ=Asia/Jakarta
 mkdir -p /etc/cron.d
 printf "SHELL=/bin/bash\nTZ=Asia/Jakarta\nPATH=/usr/local/bin:/usr/bin:/bin\n* * * * * /usr/local/bin/php /var/www/html/artisan schedule:run >> /var/www/html/storage/logs/scheduler.log 2>&1\n" > /etc/cron.d/laravel-scheduler
