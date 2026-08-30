@@ -1,0 +1,16 @@
+services:
+  korlas:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: korlas
+    ports:
+      - "7474:80"
+    volumes:
+      - korlas-data:/data
+      - korlas-storage:/var/www/html/storage
+    restart: unless-stopped
+
+volumes:
+  korlas-data:
+  korlas-storage:

@@ -1,0 +1,11 @@
+.git
+.php
+vendor
+node_modules
+public/storage
+public/hot
+database/database.sqlite
+storage/app/public/proofs
+bootstrap/cache
+.env
+.phpunit.result.cache
