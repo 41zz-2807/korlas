@@ -46,14 +46,25 @@ for arg in "$@"; do
 done
 
 # ---- Tentukan lokasi database ----
-# Prioritas: env DB_DATABASE -> nilai di .env -> default `database/database.sqlite`
-DB_PATH="${DB_DATABASE:-}"
-if [[ -z "$DB_PATH" && -f .env ]]; then
+# Prioritas: nilai di .env (di container = /data/.env yang selalu benar)
+# -> env DB_DATABASE -> default `database/database.sqlite`.
+# (Catatan: `docker exec` TIDAK mewarisi export entrypoint; ia memakai env
+# .env.docker via compose yang bisa memuat DB_DATABASE lama yang salah.)
+DB_PATH=""
+if [[ -f .env ]]; then
     DB_PATH="$(grep -E '^DB_DATABASE=' .env | head -1 | cut -d= -f2- | tr -d '"' || true)"
+fi
+if [[ -z "$DB_PATH" && -n "${DB_DATABASE:-}" ]]; then
+    DB_PATH="$DB_DATABASE"
 fi
 DB_PATH="${DB_PATH:-database/database.sqlite}"
 # Bila dikonfigurasi dengan awalan "sqlite:", buang prefix-nya
 DB_PATH="${DB_PATH#sqlite:}"
+
+# Paksa artisan (migrate/optimize) memakai DB ini — `docker exec` mewarisi
+# env .env.docker lama yang bisa salah, bukan export entrypoint.
+export DB_CONNECTION=sqlite
+export DB_DATABASE="$DB_PATH"
 
 if [[ -z "$DB_PATH" ]]; then
     echo "ERROR: path database kosong (DB_DATABASE tidak terisi)." >&2
