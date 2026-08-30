@@ -52,19 +52,14 @@ if [ -n "$FILE_KEY" ] && [ -z "${APP_KEY:-}" ]; then
     export APP_KEY="$FILE_KEY"
 fi
 
-# 4) Run migrations (idempotent)
+# 4) Run migrations (idempotent). Tanpa seeding: produksi harus mulai kosong.
+#    Untuk isi data contoh: docker exec korlas php artisan db:seed --force
 php artisan migrate --force
 
-# 5) Seed only on first boot
-if [ ! -f /data/.seeded ]; then
-    php artisan db:seed --force
-    touch /data/.seeded
-fi
-
-# 6) Ensure runtime-writable permissions
+# 5) Ensure runtime-writable permissions
 chown -R www-data:www-data /data storage bootstrap/cache
 
-# 7) Set up Laravel scheduler via cron (runs every minute)
+# 6) Set up Laravel scheduler via cron (runs every minute)
 export TZ=Asia/Jakarta
 mkdir -p /etc/cron.d
 printf "SHELL=/bin/bash\nTZ=Asia/Jakarta\nPATH=/usr/local/bin:/usr/bin:/bin\n* * * * * /usr/local/bin/php /var/www/html/artisan schedule:run >> /var/www/html/storage/logs/scheduler.log 2>&1\n" > /etc/cron.d/laravel-scheduler
