@@ -19,9 +19,11 @@ class RekapController extends Controller
         $students = $this->getStudents();
         $months = $this->academicMonths();
         $paid = $this->paidMatrix($kategori);
+        $komiteAmounts = $this->komiteAmounts();
         $kategoriLabel = $kategori === 'kas' ? 'Kas Kelas' : 'Komite';
+        $lunasThreshold = $kategori === 'kas' ? 11 : 75000;
 
-        return view('rekap.index', compact('students', 'months', 'paid', 'kategori', 'kategoriLabel'));
+        return view('rekap.index', compact('students', 'months', 'paid', 'kategori', 'kategoriLabel', 'lunasThreshold', 'komiteAmounts'));
     }
 
     public function export(Request $request)
@@ -36,15 +38,17 @@ class RekapController extends Controller
         $students = $this->getStudents();
         $months = $this->academicMonths();
         $paid = $this->paidMatrix($kategori);
+        $komiteAmounts = $this->komiteAmounts();
         $kategoriLabel = $kategori === 'kas' ? 'Kas Kelas' : 'Komite';
+        $lunasThreshold = $kategori === 'kas' ? 11 : 75000;
 
         $filename = 'Rekap Status Pembayaran Siswa - ' . $kategoriLabel;
 
         if ($export === 'siswa_xlsx') {
-            return $this->exportXlsx($students, $months, $paid, $kategoriLabel, $filename);
+            return $this->exportXlsx($students, $months, $paid, $kategoriLabel, $filename, $lunasThreshold, $komiteAmounts);
         }
 
-        return $this->exportPdf($students, $months, $paid, $kategoriLabel, $filename);
+        return $this->exportPdf($students, $months, $paid, $kategoriLabel, $filename, $lunasThreshold, $komiteAmounts);
     }
 
     public function paidMatrix(string $kategori): array
@@ -61,8 +65,9 @@ class RekapController extends Controller
             }
 
             $monthList = is_array($t->months) ? $t->months : [];
+
             if (empty($monthList)) {
-                continue;
+                $monthList = [$t->transaction_date->format('Y-m')];
             }
 
             foreach ($monthList as $m) {
@@ -71,6 +76,24 @@ class RekapController extends Controller
         }
 
         return $paid;
+    }
+
+    public function komiteAmounts(): array
+    {
+        $amounts = [];
+        $transactions = Transaction::where('type', 'income')
+            ->where('category', 'komite')
+            ->get();
+
+        foreach ($transactions as $t) {
+            $name = strtoupper(trim($t->name));
+            if ($name === '') {
+                continue;
+            }
+            $amounts[$name] = ($amounts[$name] ?? 0) + (float) $t->amount;
+        }
+
+        return $amounts;
     }
 
     public function getStudents(): array
@@ -97,7 +120,7 @@ class RekapController extends Controller
         $cursor = Carbon::create($startYear, 7, 1);
         $months = [];
 
-        for ($i = 0; $i < 12; $i++) {
+        for ($i = 0; $i < 11; $i++) {
             $key = $cursor->format('Y-m');
             $months[$key] = [
                 'name' => $indo[$cursor->format('m')],
@@ -110,16 +133,21 @@ class RekapController extends Controller
         return $months;
     }
 
-    private function exportXlsx(array $students, array $months, array $paid, string $kategoriLabel, string $filename)
+    private function exportXlsx(array $students, array $months, array $paid, string $kategoriLabel, string $filename, int $lunasThreshold, array $komiteAmounts)
     {
         $monthNames = array_column($months, 'name');
 
-        $rows = [['Nama Siswa', ...$monthNames]];
+        $rows = [['Nama Siswa', ...$monthNames, 'Status']];
         foreach ($students as $student) {
             $row = [ucwords(strtolower($student))];
+            $studentPaid = $paid[strtoupper(trim($student))] ?? [];
+            $totalPaid = count($studentPaid);
+            $totalAmount = $komiteAmounts[strtoupper(trim($student))] ?? 0;
+            $isLunas = $lunasThreshold >= 1000 ? $totalAmount >= $lunasThreshold : $totalPaid >= $lunasThreshold;
             foreach ($months as $m => $meta) {
-                $row[] = isset($paid[strtoupper(trim($student))][$m]) ? 'LUNAS' : 'BELUM';
+                $row[] = isset($studentPaid[$m]) ? 'LUNAS' : 'BELUM';
             }
+            $row[] = $isLunas ? 'LUNAS' : 'BELUM';
             $rows[] = $row;
         }
 
@@ -211,15 +239,15 @@ class RekapController extends Controller
         return $data;
     }
 
-    private function exportPdf(array $students, array $months, array $paid, string $kategoriLabel, string $filename)
+    private function exportPdf(array $students, array $months, array $paid, string $kategoriLabel, string $filename, int $lunasThreshold, array $komiteAmounts)
     {
-        $pdf = $this->buildRekapPdf($students, $months, $paid, $kategoriLabel);
+        $pdf = $this->buildRekapPdf($students, $months, $paid, $kategoriLabel, $lunasThreshold, $komiteAmounts);
 
         $pdf->Output($filename . '.pdf', 'D');
         exit;
     }
 
-    public function buildRekapPdf(array $students, array $months, array $paid, string $kategoriLabel)
+    public function buildRekapPdf(array $students, array $months, array $paid, string $kategoriLabel, int $lunasThreshold = 11, array $komiteAmounts = [])
     {
         $pdf = new \TCPDF('L', 'mm', 'A4', true, 'UTF-8');
         $pdf->SetMargins(8, 10, 8);
@@ -253,11 +281,20 @@ class RekapController extends Controller
         $pdf->SetFont('helvetica', '', 8);
         $fill = false;
         foreach ($students as $student) {
+            $studentPaid = $paid[strtoupper(trim($student))] ?? [];
+            $totalPaid = count($studentPaid);
+            $totalAmount = $komiteAmounts[strtoupper(trim($student))] ?? 0;
+            $isLunas = $lunasThreshold >= 1000 ? $totalAmount >= $lunasThreshold : $totalPaid >= $lunasThreshold;
+
             $pdf->SetFillColor(244, 247, 252);
             $pdf->Cell($widths[0], 6, ucwords(strtolower($student)), 1, 0, 'L', $fill);
             foreach ($monthKeys as $m) {
-                $ok = isset($paid[strtoupper(trim($student))][$m]);
-                $pdf->Cell($widths[1], 6, $ok ? 'V' : '-', 1, 0, 'C', $fill);
+                if ($isLunas) {
+                    $pdf->Cell($widths[1], 6, 'V', 1, 0, 'C', $fill);
+                } else {
+                    $ok = isset($studentPaid[$m]);
+                    $pdf->Cell($widths[1], 6, $ok ? 'V' : '-', 1, 0, 'C', $fill);
+                }
             }
             $pdf->Ln();
             $fill = !$fill;

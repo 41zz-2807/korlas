@@ -78,6 +78,16 @@
     .rekap-table td:first-child { font-weight: 600; min-width: 170px; }
     .status-check { color: #16a34a; font-weight: bold; text-align: center; }
     .status-cross { color: #cbd5e1; text-align: center; }
+    .status-lunas {
+        color: #fff;
+        background: linear-gradient(135deg, #16a34a, #15803d);
+        font-weight: 700;
+        text-align: center;
+        border-radius: 6px;
+        padding: 2px 8px;
+        font-size: 0.8rem;
+        display: inline-block;
+    }
 </style>
 
 <div class="container mt-3">
@@ -118,18 +128,34 @@
                 </thead>
                 <tbody>
                     @forelse($students as $student)
+                        @php
+                            $studentPaid = $paid[strtoupper(trim($student))] ?? [];
+                            $totalPaid = count($studentPaid);
+                            if ($kategori === 'kas') {
+                                $isLunas = $totalPaid >= $lunasThreshold;
+                            } else {
+                                $totalAmount = $komiteAmounts[strtoupper(trim($student))] ?? 0;
+                                $isLunas = $totalAmount >= $lunasThreshold;
+                            }
+                        @endphp
                         <tr>
                             <td>{{ ucwords(strtolower($student)) }}</td>
-                            @foreach($months as $m => $meta)
-                                @if(isset($paid[strtoupper(trim($student))][$m]))
-                                    <td class="status-check">&#10004;</td>
-                                @else
-                                    <td class="status-cross">-</td>
-                                @endif
-                            @endforeach
+                            @if($isLunas)
+                                <td class="text-center" style="background:#f0fdf4;" colspan="{{ count($months) }}">
+                                    <span class="status-lunas">&#10004; LUNAS</span>
+                                </td>
+                            @else
+                                @foreach($months as $m => $meta)
+                                    @if(isset($studentPaid[$m]))
+                                        <td class="status-check">&#10004;</td>
+                                    @else
+                                        <td class="status-cross">-</td>
+                                    @endif
+                                @endforeach
+                            @endif
                         </tr>
                     @empty
-                        <tr><td colspan="13" class="text-center text-muted py-4">Belum ada data siswa.</td></tr>
+                        <tr><td colspan="{{ count($months) + 1 }}" class="text-center text-muted py-4">Belum ada data siswa.</td></tr>
                     @endforelse
                 </tbody>
             </table>

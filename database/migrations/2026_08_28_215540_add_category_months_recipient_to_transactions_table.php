@@ -9,9 +9,9 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('transactions', function (Blueprint $table) {
-            $table->string('category')->nullable()->after('type');
-            $table->json('months')->nullable()->after('category');
-            $table->string('recipient')->nullable()->after('description');
+            $table->string('category')->nullable();
+            $table->json('months')->nullable();
+            $table->string('recipient')->nullable();
         });
     }
 

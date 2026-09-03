@@ -66,11 +66,15 @@
 
                             <div class="mb-3" id="monthsWrap">
                                 <label class="form-label">Bulan yang Dibayar (bisa pilih lebih dari satu)</label>
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="checkbox" id="selectAllMonths">
+                                    <label class="form-check-label fw-bold" for="selectAllMonths">Pilih Semua</label>
+                                </div>
                                 <div class="row g-2">
                                     @foreach($months as $key => $label)
                                         <div class="col-6 col-md-3">
                                             <div class="form-check">
-                                                <input class="form-check-input month-check" type="checkbox" name="months[]" value="{{ $key }}" id="m_{{ $key }}">
+                                                <input class="form-check-input month-check" type="checkbox" name="months[]" value="{{ $key }}" id="m_{{ $key }}" data-month="{{ $key }}">
                                                 <label class="form-check-label" for="m_{{ $key }}">{{ $label }}</label>
                                             </div>
                                         </div>
@@ -84,7 +88,8 @@
 
                             <div class="mb-3 d-none" id="lainLainAmountWrap">
                                 <label class="form-label">Jumlah (Rp)</label>
-                                <input type="number" name="amount" class="form-control" min="0" step="0.01">
+                                <input type="text" name="amount" id="amountInput" class="form-control" placeholder="0" autocomplete="off">
+                                <input type="hidden" name="amount_value" id="amountValue">
                             </div>
 
                             <div class="mb-3">
@@ -117,7 +122,8 @@
                             </div>
                             <div class="mb-3">
                                 <label class="form-label">Total Jumlah Pengeluaran (Rp)</label>
-                                <input type="number" name="amount" class="form-control" min="0" step="0.01">
+                                <input type="text" name="amount" id="expenseAmountInput" class="form-control" placeholder="0" autocomplete="off">
+                                <input type="hidden" name="amount_value" id="expenseAmountValue">
                             </div>
                             <div class="mb-3">
                                 <label class="form-label">Upload Bukti (bisa multiple, akan digabung jadi 1 PDF)</label>
@@ -144,6 +150,8 @@
 @section('scripts')
     <script>
         document.addEventListener('DOMContentLoaded', function () {
+            const paidMonths = @json($paidMonths);
+
             const typeIncome = document.getElementById('typeIncome');
             const typeExpense = document.getElementById('typeExpense');
             const incomeSection = document.getElementById('incomeSection');
@@ -161,8 +169,14 @@
             const nameSource = document.getElementById('nameSource');
 
             const monthChecks = document.querySelectorAll('.month-check');
+            const selectAllMonths = document.getElementById('selectAllMonths');
             const kasTotal = document.getElementById('kasTotal');
             const monthCount = document.getElementById('monthCount');
+
+            const amountInput = document.getElementById('amountInput');
+            const amountValue = document.getElementById('amountValue');
+            const expenseAmountInput = document.getElementById('expenseAmountInput');
+            const expenseAmountValue = document.getElementById('expenseAmountValue');
 
             function syncType() {
                 const expense = typeExpense.checked;
@@ -182,30 +196,91 @@
             }
 
             function updateKasTotal() {
-                const count = [...monthChecks].filter(c => c.checked).length;
+                const count = [...monthChecks].filter(c => c.checked && !c.disabled).length;
                 monthCount.textContent = count;
                 kasTotal.textContent = (count * 15000).toLocaleString('id-ID');
+                syncSelectAll();
+            }
+
+            function syncSelectAll() {
+                const available = [...monthChecks].filter(c => !c.disabled);
+                selectAllMonths.checked = available.length > 0 && available.every(c => c.checked);
+            }
+
+            function syncPaidMonths() {
+                const selectedName = studentName.value.trim().toUpperCase();
+                const paid = paidMonths[selectedName] || {};
+
+                monthChecks.forEach(cb => {
+                    const m = cb.dataset.month;
+                    if (paid[m]) {
+                        cb.checked = false;
+                        cb.disabled = true;
+                        cb.closest('.form-check').style.opacity = '0.5';
+                        cb.closest('.form-check').title = 'Sudah dibayar';
+                    } else {
+                        cb.disabled = false;
+                        cb.closest('.form-check').style.opacity = '1';
+                        cb.closest('.form-check').title = '';
+                    }
+                });
+
+                updateKasTotal();
+            }
+
+            function formatRupiah(input, hiddenInput) {
+                input.addEventListener('input', function () {
+                    let val = this.value.replace(/[^\d]/g, '');
+                    if (val === '') {
+                        this.value = '';
+                        hiddenInput.value = '';
+                        return;
+                    }
+                    this.value = parseInt(val, 10).toLocaleString('id-ID');
+                    hiddenInput.value = val;
+                });
+            }
+
+            if (amountInput && amountValue) {
+                formatRupiah(amountInput, amountValue);
+            }
+            if (expenseAmountInput && expenseAmountValue) {
+                formatRupiah(expenseAmountInput, expenseAmountValue);
             }
 
             typeIncome.addEventListener('change', syncType);
             typeExpense.addEventListener('change', syncType);
             category.addEventListener('change', syncCategory);
             monthChecks.forEach(c => c.addEventListener('change', updateKasTotal));
+            selectAllMonths.addEventListener('change', function () {
+                monthChecks.forEach(cb => {
+                    if (!cb.disabled) cb.checked = selectAllMonths.checked;
+                });
+                updateKasTotal();
+            });
+            studentName.addEventListener('change', syncPaidMonths);
 
             notStudent.addEventListener('change', function () {
                 if (notStudent.checked) {
                     nameSource.value = 'manual';
                     studentName.disabled = true;
                     manualName.classList.remove('d-none');
+                    monthChecks.forEach(cb => {
+                        cb.disabled = false;
+                        cb.closest('.form-check').style.opacity = '1';
+                        cb.closest('.form-check').title = '';
+                    });
                 } else {
                     nameSource.value = 'student';
                     studentName.disabled = false;
                     manualName.classList.add('d-none');
+                    syncPaidMonths();
                 }
             });
 
             syncType();
             syncCategory();
+            syncPaidMonths();
         });
     </script>
 @endsection

@@ -65,8 +65,9 @@ class AdminController extends Controller
         $students = $this->getStudents();
         $months = $this->academicMonths();
         $isAdmin = session()->has('admin_authenticated');
+        $paidMonths = $this->getPaidMonthsPerStudent();
 
-        return view('admin.transactions.create', compact('students', 'months', 'isAdmin'));
+        return view('admin.transactions.create', compact('students', 'months', 'isAdmin', 'paidMonths'));
     }
 
     public function store(Request $request)
@@ -430,12 +431,34 @@ class AdminController extends Controller
         $startYear = now()->month >= 7 ? now()->year : now()->year - 1;
         $cursor = Carbon::create($startYear, 7, 1);
 
-        for ($i = 0; $i < 12; $i++) {
+        for ($i = 0; $i < 11; $i++) {
             $key = $cursor->format('Y-m');
             $months[$key] = $cursor->translatedFormat('M Y');
             $cursor->addMonth();
         }
 
         return $months;
+    }
+
+    private function getPaidMonthsPerStudent(): array
+    {
+        $paid = [];
+        $transactions = Transaction::where('type', 'income')
+            ->where('category', 'kas')
+            ->get();
+
+        foreach ($transactions as $t) {
+            $name = strtoupper(trim($t->name));
+            if ($name === '') {
+                continue;
+            }
+
+            $monthList = is_array($t->months) ? $t->months : [];
+            foreach ($monthList as $m) {
+                $paid[$name][$m] = true;
+            }
+        }
+
+        return $paid;
     }
 }
